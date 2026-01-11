@@ -1,0 +1,7 @@
+{
+  "name": "GeoDrop - AirDrop for the Web",
+  "description": "A real-time, proximity-based discovery and interaction app that lets users find nearby devices and share content via WebSockets and Geolocation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
