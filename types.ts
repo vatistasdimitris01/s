@@ -19,12 +19,20 @@ export interface User {
 }
 
 export interface ServerMessage {
-  type: 'UPDATE_LIST' | 'CHAT_MESSAGE' | 'SIGNALING';
+  type: 'UPDATE_LIST' | 'CHAT_MESSAGE' | 'SIGNALING' | 'FILE_TRANSFER';
   payload: any;
+}
+
+export interface SharedFile {
+  name: string;
+  type: string;
+  size: number;
+  data: string; // base64
 }
 
 export interface ChatMessage {
   from: string;
-  text: string;
+  text?: string;
+  file?: SharedFile;
   timestamp: number;
 }

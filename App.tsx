@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapPin, Search, Info, AlertCircle } from 'lucide-react';
-import { User, DeviceType, ServerMessage, ChatMessage } from './types';
+import { User, DeviceType, ServerMessage, ChatMessage, SharedFile } from './types';
 import { NEARBY_THRESHOLD_METERS } from './constants';
 import { calculateDistance, getDeviceType, generateName } from './utils/geo';
 import { SocketService } from './services/socket';
@@ -26,7 +26,6 @@ const App: React.FC = () => {
     switch (msg.type) {
       case 'UPDATE_LIST': {
         const users: User[] = msg.payload;
-        // Logic: Filter users by proximity (if the server didn't do it) and exclude self
         if (currentUser) {
           const processed = users
             .filter(u => u.sessionId !== sessionId)
@@ -48,8 +47,12 @@ const App: React.FC = () => {
       }
       case 'CHAT_MESSAGE': {
         const chatMsg: ChatMessage = msg.payload;
-        const otherId = chatMsg.from === sessionId ? activeChatId : chatMsg.from;
-        if (otherId) {
+        // In our mock/broadcast system, messages might be received by everyone.
+        // In a real P2P/Routed system, only the intended recipient gets it.
+        // We filter by checking if it's meant for us (if payload had 'to') or from someone we know.
+        const otherId = chatMsg.from === sessionId ? (msg.payload.to || activeChatId) : chatMsg.from;
+        
+        if (otherId && otherId !== sessionId) {
           setMessages(prev => ({
             ...prev,
             [otherId]: [...(prev[otherId] || []), chatMsg]
@@ -86,7 +89,6 @@ const App: React.FC = () => {
         setCurrentUser(newUser);
         setStatus('ready');
 
-        // Send location update to "server"
         if (socketRef.current) {
           socketRef.current.send('UPDATE_LOCATION', newUser);
         }
@@ -99,7 +101,6 @@ const App: React.FC = () => {
       { enableHighAccuracy: true }
     );
 
-    // Initialize socket
     socketRef.current = new SocketService(sessionId);
     socketRef.current.connect(handleSocketMessage);
 
@@ -107,22 +108,20 @@ const App: React.FC = () => {
       navigator.geolocation.clearWatch(watchId);
       socketRef.current?.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, [handleSocketMessage, sessionId]);
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = (text: string, file?: SharedFile) => {
     if (!activeChatId || !socketRef.current || !currentUser) return;
     
     const chatMsg: ChatMessage = {
       from: sessionId,
-      text,
+      text: text || undefined,
+      file,
       timestamp: Date.now()
     };
 
-    // Send to "server" which would route it to the other user
     socketRef.current.send('CHAT_MESSAGE', { to: activeChatId, ...chatMsg });
     
-    // Add to local state immediately
     setMessages(prev => ({
       ...prev,
       [activeChatId]: [...(prev[activeChatId] || []), chatMsg]
@@ -171,7 +170,6 @@ const App: React.FC = () => {
 
         {status === 'ready' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Search Radar Section */}
             <div className="relative bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 overflow-hidden shadow-xl shadow-indigo-100">
               <div className="relative z-10 flex flex-col items-center text-center space-y-4 py-4">
                 <div className="relative">
@@ -188,12 +186,10 @@ const App: React.FC = () => {
                   </p>
                 </div>
               </div>
-              {/* Decorative patterns */}
               <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
               <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
             </div>
 
-            {/* List Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -225,7 +221,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating Chat Modal */}
       {activeChatId && activeChatUser && currentUser && (
         <Chat
           targetUser={activeChatUser}
@@ -236,7 +231,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Bottom Sticky Tips */}
       <div className="fixed bottom-0 inset-x-0 p-4 pointer-events-none">
         <div className="max-w-xl mx-auto flex justify-center">
           <div className="bg-white/90 backdrop-blur border border-slate-200 px-4 py-2 rounded-full shadow-lg text-[10px] text-slate-500 font-medium flex items-center gap-2 pointer-events-auto">
